@@ -72,8 +72,6 @@ app.post('/api/users', function(req, res, next) {
 
 //Create new exercise
 app.post("/api/users/:id/exercises", function(req, res, next) {
-
-  console.log("body" + req.body["date"]);
   
   req.description = req.body['description'];
   req.duration = req.body['duration'];
@@ -83,7 +81,6 @@ app.post("/api/users/:id/exercises", function(req, res, next) {
     console.log("date is " + undefined)
     req.date = new Date();
   }
-  console.log("datum is " + req.date);
   next();
 }, async function(req, res, next) {
    await user.findById(req.test, function(err, data) {
@@ -91,16 +88,17 @@ app.post("/api/users/:id/exercises", function(req, res, next) {
     req.person = data;
   });
   next();
-}, function(req, res, next){
+},async function(req, res, next){
 
-  let countToSet;
-  log.findById(req.test, function(err, data) {
+  await log.findById(req.test, function(err, data) {
     if (err) return console.log(err);
-    countToSet = data["count"] + 1;
-  })
-
+    req.countToSet = data["count"] + 1;
+  });
+  next();
+}, function (req,res,next){
+  
   log.findByIdAndUpdate(req.test, {
-    "$set": { count: countToSet },
+    "$set": { count: req.countToSet },
     "$push": {
       "log": {
         description: req.description,
@@ -112,14 +110,12 @@ app.post("/api/users/:id/exercises", function(req, res, next) {
     if (err) return console.log(err);
   })
 
-  console.log(req.person);
 
   const exerciseVar = new exercise({
     username: req.person["username"],
     description: req.description,
     duration: parseInt(req.duration),
     date: req.date.toDateString(),
-    _id: req.test
   })
   exerciseVar.save(function(err, data) {
     if (err) return console.error(err);
@@ -134,7 +130,59 @@ app.post("/api/users/:id/exercises", function(req, res, next) {
   )
 })
 
-app.get()
+app.get("/api/users/:id/logs",function(req,res,next){
+  req.test = req.params["id"];
+  next()
+},async function(req,res,next){
+  await user.findById(req.test,function(err,data){
+    if (err) return console.log(err);
+    req.username = data.username;
+  })
+  
+  next();
+},async function(req,res,next){
+
+  await log.find({username: req.username}, function(err, data) {
+    if (err) return console.log(err);
+ req.log = data
+  next();
+  })},function(req,res,next){  
+
+  let data = JSON.parse(JSON.stringify(req.log))
+  
+
+  
+ if(req.query.from || req.query.to){
+    let fromDate = new Date(0)
+        let toDate = new Date()
+        
+        if(req.query.from){
+          fromDate = new Date(req.query.from)
+        }
+        
+        if(req.query.to){
+          toDate = new Date(req.query.to)
+        }
+        
+        fromDate = fromDate.getTime()
+        toDate = toDate.getTime()
+  data[0].log = data[0].log.filter((session) => {
+      let sessionDate = new Date(session.date).getTime()
+      return sessionDate >= fromDate && sessionDate <= toDate
+    })
+  }
+
+    if(req.query.limit){
+        data[0].log = data[0].log.slice(0, req.query.limit)
+      }
+
+    res.json({
+      username:data[0].username,
+      count:data[0].count,
+      _id:data[0]._id,
+      log: data[0].log
+    });
+  })
 
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log('Your app is listening on port ' + listener.address().port)
